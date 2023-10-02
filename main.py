@@ -1,22 +1,24 @@
 import discord
-from discord.ext import commands
-from discord import app_commands
 import asyncio
 import yt_dlp
-from youtube_search import YoutubeSearch
 import json
+from youtube_search import YoutubeSearch
+from collections import defaultdict
+from discord.ext import commands
+from discord import app_commands
 
 
 
-token = "#enter your token here"
+token = "#add your token here"
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 
 
 voice_clients={}
-song_queue = []
-song_title_list = []
+song_queue = defaultdict(list)
+song_title_list = defaultdict(list)
 playlist_url = []
+
 
 
 yt_dl_opts ={
@@ -47,14 +49,14 @@ async def after_play(ctx):
     if len(song_queue) > 0:
         try:
         
-            player = await discord.FFmpegOpusAudio.from_probe(song_queue[0], **ffmpeg_options)
+            player = await discord.FFmpegOpusAudio.from_probe(song_queue[ctx.guild.id][0], **ffmpeg_options)
             voice_clients[ctx.guild.id].play(player, after = lambda e : asyncio.run_coroutine_threadsafe(after_play(ctx), client.loop))
-            song_queue.pop(0)
-            await ctx.send(f"Playing now {song_title_list[0]}")
+            song_queue[ctx.guild.id].pop(0)
+            await ctx.send(f"Playing now {song_title_list[ctx.guild.id][0]}")
 
             await client.change_presence(status=discord.Status.idle)            
 
-            song_title_list.pop(0)
+            song_title_list[ctx.guild.id].pop(0)
             
 
         except Exception as err:
@@ -83,7 +85,6 @@ async def play(ctx, *, arg):
     try:
         voice_client = await ctx.author.voice.channel.connect()
         voice_clients[voice_client.guild.id] = voice_client
-    
     except:
         print("erorr on enter")
 
@@ -105,6 +106,7 @@ async def play(ctx, *, arg):
                 yt_id = str(json.loads(yt)['videos'][0]['id'])
                 url = 'https://www.youtube.com/watch?v='+yt_id
                 print("not this")
+
             except:
                 pass
     
@@ -114,26 +116,25 @@ async def play(ctx, *, arg):
         song = data['url']
         song_title = data.get('title', None)
         
-        #i hate this ad
+        """#i hate this ad
         if "coba hitung jumlah nya ada berapa" in song_title:
             song_queue.pop(0)
-            song_title_list.pop(0)
+            song_title_list.pop(0)"""
 
 
-        song_title_list.append(song_title)
-        song_queue.append(song)
-        player = await discord.FFmpegOpusAudio.from_probe(song_queue[0], **ffmpeg_options)
+        song_title_list[ctx.guild.id].append(song_title)
+        song_queue[ctx.guild.id].append(song)
+        player = await discord.FFmpegOpusAudio.from_probe(song_queue[ctx.guild.id][0], **ffmpeg_options)
 
         voice_clients[ctx.guild.id].play(player, after = lambda e : asyncio.run_coroutine_threadsafe(after_play(ctx), client.loop))
-        song_queue.pop(0)
+        song_queue[ctx.guild.id].pop(0)
 
-        await ctx.send(f"Playing now {song_title_list[0]}")
+        await ctx.send(f"Playing now {song_title_list[ctx.guild.id]}")
         await client.change_presence(status=discord.Status.idle)
-        song_title_list.pop(0)
+        song_title_list[ctx.guild.id].pop(0)
 
     except Exception as err:
         print(err)
-        print("a song is already playing")
 
 @client.command()
 async def join(ctx):

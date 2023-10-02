@@ -12,8 +12,6 @@ from discord import app_commands
 token = "#add your token here"
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
-
-
 voice_clients={}
 song_queue = defaultdict(list)
 song_title_list = defaultdict(list)
@@ -144,15 +142,15 @@ async def join(ctx):
 
 @client.command()
 async def check(ctx):
-    await ctx.send(f"There is, {len(song_queue)} song in queue")
+    await ctx.send(f"There is, {len(song_queue[ctx.guild.id])} song in queue")
     await client.change_presence(status=discord.Status.idle)
-    for i in song_title_list:
+    for i in song_title_list[ctx.guild.id]:
         await ctx.send(i)
 
 @client.command()
 async def clear(ctx):
-    song_queue.clear()
-    song_title_list.clear()
+    song_queue[ctx.guild.id].clear()
+    song_title_list[ctx.guild.id].clear()
     await ctx.send("Cleared the queue")
     await client.change_presence(status=discord.Status.idle)
 
@@ -161,7 +159,7 @@ async def clear(ctx):
 async def skip(ctx):
     await client.change_presence(status=discord.Status.idle)
     voice_clients[ctx.guild.id].stop()
-    if len(song_queue) > 0:
+    if len(song_queue[ctx.guild.id]) > 0:
         await play(ctx)
         await ctx.send("Skipped current song")
     else:
@@ -197,7 +195,3 @@ async def test(ctx):
     await ctx.send("hi")
 
 client.run(token)
-
-
-
-

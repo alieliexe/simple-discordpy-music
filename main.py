@@ -9,8 +9,10 @@ from discord import app_commands
 
 
 
-token = "#add your token here"
+token = "(TOKEN HERE)"
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
+
+
 
 voice_clients={}
 song_queue = defaultdict(list)
@@ -25,9 +27,9 @@ yt_dl_opts ={
         'audioformat': 'mp3',
         'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
         'restrictfilenames': True,
-        'noplaylist': True,
+        'noplaylist': False,
         'nocheckcertificate': True,
-        'ignoreerrors': False,
+        'ignoreerrors': True,
         'logtostderr': False,
         'quiet': True,
         'no_warnings': True,
@@ -52,7 +54,7 @@ async def after_play(ctx):
             song_queue[ctx.guild.id].pop(0)
             await ctx.send(f"Playing now {song_title_list[ctx.guild.id][0]}")
 
-            await client.change_presence(status=discord.Status.idle)            
+            await client.change_presence(status=discord.Status.online)            
 
             song_title_list[ctx.guild.id].pop(0)
             
@@ -61,19 +63,18 @@ async def after_play(ctx):
             print("error on play")
             print(err)
 
+    else:
+        await client.change_presence(status= discord.Status.idle)
+
+
+
 
 
 @client.event
 async def on_ready():
     print(f"Bot logged in as {client.user}")
-    """
-    try:
-        synced = await client.tree.sync()
-        print(f"synced {len(synced)}") 
-    except Exception as err:
-        print(err)
-    """
-    
+    await client.change_presence(status=discord.Status.idle)
+
 
 
 
@@ -87,14 +88,40 @@ async def play(ctx, *, arg):
         print("erorr on enter")
 
     try:
-        if "https://" in arg:
+        if "https://" in arg and not "playlist" in arg:
             try:
-                url = arg
-                print("go this")
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(arg, download=False))
+
+                song = data['url']
+                song_title = data.get('title', None)
+
+                song_title_list[ctx.guild.id].append(song_title)
+                song_queue[ctx.guild.id].append(song)
 
             except:
-                print("test")
                 pass
+        
+        elif "https://" and "playlist" in arg:
+            try:
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(arg, download=False))
+
+                print(data['entries'])
+
+                for Song in data['entries']:
+                    
+                    song = Song['url']
+                    song_title = Song.get('title', None)
+
+                    song_title_list[ctx.guild.id].append(song_title)
+                    song_queue[ctx.guild.id].append(song)
+
+            except Exception as err:
+                print(err)
+                
+        
+
 
         else:
             try:
@@ -103,32 +130,25 @@ async def play(ctx, *, arg):
                 yt = YoutubeSearch(keywords, max_results=1).to_json()
                 yt_id = str(json.loads(yt)['videos'][0]['id'])
                 url = 'https://www.youtube.com/watch?v='+yt_id
-                print("not this")
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+
+                song = data['url']
+                song_title = data.get('title', None)
+
+                song_title_list[ctx.guild.id].append(song_title)
+                song_queue[ctx.guild.id].append(song)
 
             except:
                 pass
     
-        loop = asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
-
-        song = data['url']
-        song_title = data.get('title', None)
-        
-        """#i hate this ad
-        if "coba hitung jumlah nya ada berapa" in song_title:
-            song_queue.pop(0)
-            song_title_list.pop(0)"""
-
-
-        song_title_list[ctx.guild.id].append(song_title)
-        song_queue[ctx.guild.id].append(song)
         player = await discord.FFmpegOpusAudio.from_probe(song_queue[ctx.guild.id][0], **ffmpeg_options)
 
         voice_clients[ctx.guild.id].play(player, after = lambda e : asyncio.run_coroutine_threadsafe(after_play(ctx), client.loop))
         song_queue[ctx.guild.id].pop(0)
 
-        await ctx.send(f"Playing now {song_title_list[ctx.guild.id]}")
-        await client.change_presence(status=discord.Status.idle)
+        await ctx.send(f"Playing now {song_title_list[ctx.guild.id][0]}")
+        await client.change_presence(status=discord.Status.online)
         song_title_list[ctx.guild.id].pop(0)
 
     except Exception as err:
@@ -143,9 +163,9 @@ async def join(ctx):
 @client.command()
 async def check(ctx):
     await ctx.send(f"There is, {len(song_queue[ctx.guild.id])} song in queue")
-    await client.change_presence(status=discord.Status.idle)
-    for i in song_title_list[ctx.guild.id]:
-        await ctx.send(i)
+    await client.change_presence(status=discord.Status.online)
+    await ctx.send('\n'.join(song_title_list[ctx.guild.id]))
+
 
 @client.command()
 async def clear(ctx):
@@ -157,23 +177,25 @@ async def clear(ctx):
 
 @client.command()
 async def skip(ctx):
-    await client.change_presence(status=discord.Status.idle)
     voice_clients[ctx.guild.id].stop()
     if len(song_queue[ctx.guild.id]) > 0:
         await play(ctx)
         await ctx.send("Skipped current song")
+        await client.change_presence(status=discord.Status.online)
     else:
         await ctx.send("There are no song in queue")
+        await client.change_presence(status=discord.Status.idle)
+
 
 @client.command()
 async def pause(ctx):
-    await client.change_presence(status=discord.Status.idle)
+    await client.change_presence(status=discord.Status.online)
     voice_clients[ctx.guild.id].pause()
     await ctx.send("Song paused")
 
 @client.command()
 async def resume(ctx):
-    await client.change_presence(status=discord.Status.idle)
+    await client.change_presence(status=discord.Status.online)
     voice_clients[ctx.guild.id].resume()
     await ctx.send("Song resumed")
 
@@ -184,10 +206,11 @@ async def disconnect(ctx):
     await ctx.send("Goodbye cyka")
 
 
-
 @client.command()
-async def hi(ctx):
-    await ctx.send("hi")
+async def checkdev(ctx):
+    await ctx.send(song_queue[ctx.guild.id])
+    await client.change_presence(status=discord.Status.idle)
+    await ctx.send(song_title_list[ctx.guild.id])
 
 
 @client.command()

@@ -2,6 +2,7 @@ import discord
 import asyncio
 import yt_dlp
 import json
+import random
 from youtube_search import YoutubeSearch
 from collections import defaultdict
 from discord.ext import commands
@@ -9,7 +10,7 @@ from discord import app_commands
 
 
 
-token = "(TOKEN HERE)"
+token = "enter token here"
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 
@@ -17,7 +18,6 @@ client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 voice_clients={}
 song_queue = defaultdict(list)
 song_title_list = defaultdict(list)
-playlist_url = []
 
 
 
@@ -203,8 +203,18 @@ async def resume(ctx):
 async def disconnect(ctx):
     await client.change_presence(status=discord.Status.idle)
     await voice_clients[ctx.guild.id].disconnect()
-    await ctx.send("Goodbye cyka")
+    await ctx.send("IM THE STORM THAT IS LEAVING")
 
+@client.command()
+async def shuffle(ctx):
+
+    seed = random.randint(1, 1000)
+    random.seed(seed)
+    random.shuffle(song_queue[ctx.guild.id])
+
+    random.seed(seed)
+    random.shuffle(song_title_list[ctx.guild.id])
+    await ctx.send("Song has been shuffled")
 
 @client.command()
 async def checkdev(ctx):

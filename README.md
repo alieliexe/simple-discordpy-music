@@ -7,5 +7,3 @@ To work it need several Library. Such as:
 4. yt-dlp/yt-dl(may require some changes)
 5. youtube-search
 6. FFMPEG
-
-Still have not tried to host it for 24/7, so error may occur.

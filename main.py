@@ -3,6 +3,8 @@ import asyncio
 import yt_dlp
 import json
 import random
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 from youtube_search import YoutubeSearch
 from collections import defaultdict
 from discord.ext import commands
@@ -10,7 +12,10 @@ from discord import app_commands
 
 
 
-token = "enter token here"
+
+
+token = "put token here"
+
 client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 
 
@@ -18,6 +23,16 @@ client = commands.Bot(command_prefix="!", intents=discord.Intents.all())
 voice_clients={}
 song_queue = defaultdict(list)
 song_title_list = defaultdict(list)
+
+
+#make app in spotify for devloper
+client_id = 'client id'
+client_secret = 'client secret'
+redirect_uri = 'http://localhost:5000/callback'
+
+client_credentials_manager = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+
+sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
 
 
@@ -46,7 +61,7 @@ ffmpeg_options =  {
 
 
 async def after_play(ctx):
-    if len(song_queue) > 0:
+    if len(song_queue[ctx.guild.id]) > 0:
         try:
         
             player = await discord.FFmpegOpusAudio.from_probe(song_queue[ctx.guild.id][0], **ffmpeg_options)
@@ -64,18 +79,17 @@ async def after_play(ctx):
             print(err)
 
     else:
-        await client.change_presence(status= discord.Status.idle)
-
-
-
-
+        await asyncio.sleep(60 * 10)
+        if voice_clients[ctx.guild.id].is_playing() == False:
+            await client.change_presence(status=discord.Status.idle)
+            await voice_clients[ctx.guild.id].disconnect()
+            await ctx.send("IM THE STORM THAT IS LEAVING")
+            
 
 @client.event
 async def on_ready():
     print(f"Bot logged in as {client.user}")
     await client.change_presence(status=discord.Status.idle)
-
-
 
 
 @client.command()
@@ -87,22 +101,46 @@ async def play(ctx, *, arg):
     except:
         print("erorr on enter")
 
-    try:
-        if "https://" in arg and not "playlist" in arg:
+    try:            
+        if "https://" and "playlist" in arg and "spotify" in arg:
             try:
+                results = sp.playlist_tracks(arg)
+
+                for song in results['items']:
+                    track = song['track']
+                    song_title_list[ctx.guild.id].append(track['name'])
+
+                    keywords = track['name']
+                    yt = YoutubeSearch(keywords, max_results=1).to_json()
+                    yt_id = str(json.loads(yt)['videos'][0]['id'])
+                    url = 'https://www.youtube.com/watch?v='+yt_id
+                    loop = asyncio.get_event_loop()
+                    data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
+
+                    song_queue[ctx.guild.id].append(data['url'])
+            except Exception as err:
+                print(err)
+
+        elif "https://" and "spotify" and "track" in arg:
+            try:
+                print("YES")
+                song = sp.track(arg)
+                song_title_list[ctx.guild.id].append(song['name'])
+
+                keywords = song['name']
+                yt = YoutubeSearch(keywords, max_results=1).to_json()
+                yt_id = str(json.loads(yt)['videos'][0]['id'])
+                url = 'https://www.youtube.com/watch?v='+yt_id
                 loop = asyncio.get_event_loop()
-                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(arg, download=False))
+                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
 
-                song = data['url']
-                song_title = data.get('title', None)
+                song_queue[ctx.guild.id].append(data['url'])
 
-                song_title_list[ctx.guild.id].append(song_title)
-                song_queue[ctx.guild.id].append(song)
+            except Exception as err:
+                print(err)
 
-            except:
-                pass
-        
-        elif "https://" and "playlist" in arg:
+
+        elif "https://" and "playlist" and "youtube " in arg:
             try:
                 loop = asyncio.get_event_loop()
                 data = await loop.run_in_executor(None, lambda: ytdl.extract_info(arg, download=False))
@@ -119,6 +157,20 @@ async def play(ctx, *, arg):
 
             except Exception as err:
                 print(err)
+        
+        elif "https://" and "youtube"in arg:
+            try:
+                loop = asyncio.get_event_loop()
+                data = await loop.run_in_executor(None, lambda: ytdl.extract_info(arg, download=False))
+
+                song = data['url']
+                song_title = data.get('title', None)
+
+                song_title_list[ctx.guild.id].append(song_title)
+                song_queue[ctx.guild.id].append(song)
+
+            except:
+                pass
                 
         
 
